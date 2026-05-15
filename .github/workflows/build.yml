@@ -29,6 +29,10 @@ jobs:
           gcc-aarch64-linux-gnu \
           gcc-arm-linux-gnueabi
 
+      - name: Remove old kernel source
+        run: |
+          rm -rf kernel
+
       - name: Clone kernel source
         run: |
           git clone --depth=1 \
@@ -106,6 +110,8 @@ jobs:
 
       - name: Clone AnyKernel3
         run: |
+          rm -rf AnyKernel3
+
           git clone --depth=1 \
           https://github.com/osm0sis/AnyKernel3.git AnyKernel3
 
