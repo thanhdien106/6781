@@ -5,7 +5,7 @@ on:
 
 env:
   KERNEL_SOURCE: https://github.com/thanhdien106/6781.git
-  KERNEL_SOURCE_BRANCH: main
+  KERNEL_SOURCE_BRANCH: master
 
   DEFCONFIG: fleur_defconfig
 
