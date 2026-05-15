@@ -5,7 +5,6 @@ on:
 
 env:
   KERNEL_SOURCE: https://github.com/thanhdien106/6781.git
-
   DEFCONFIG: fleur_defconfig
 
 jobs:
@@ -13,7 +12,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout NonGKI Builder
+      - name: Checkout Builder
         uses: actions/checkout@v4
 
       - name: Install packages
@@ -28,7 +27,7 @@ jobs:
           gcc-aarch64-linux-gnu \
           gcc-arm-linux-gnueabi
 
-      - name: Remove old source
+      - name: Cleanup
         run: |
           rm -rf kernel
           rm -rf AnyKernel3
@@ -38,12 +37,6 @@ jobs:
           git clone --depth=1 \
           $KERNEL_SOURCE kernel
 
-      - name: Show branch
-        run: |
-          cd kernel
-          git branch
-          git log --oneline -1
-
       - name: Setup KernelSU-Next
         run: |
           cd kernel
@@ -52,16 +45,19 @@ jobs:
           "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" \
           | bash -s legacy
 
-      - name: Show SUSFS patch
-        run: |
-          find Patches -type f | grep -i susfs
-
       - name: Apply SUSFS patch
         run: |
           cd kernel
 
-          patch -p1 \
-          < ../Patches/Patch/susfs_patch_to_4.19.patch || true
+          PATCH_FILE=$(find ../ -type f | grep "susfs_patch_to_4.19.patch" | head -n 1)
+
+          echo "$PATCH_FILE"
+
+          if [ -n "$PATCH_FILE" ]; then
+            patch -p1 < "$PATCH_FILE" || true
+          else
+            echo "SUSFS patch not found"
+          fi
 
       - name: Enable KernelSU and SUSFS
         run: |
@@ -75,7 +71,6 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> arch/arm64/configs/$DEFCONFIG
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> arch/arm64/configs/$DEFCONFIG
           echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> arch/arm64/configs/$DEFCONFIG
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> arch/arm64/configs/$DEFCONFIG
 
           echo "CONFIG_KPROBES=y" >> arch/arm64/configs/$DEFCONFIG
           echo "CONFIG_HAVE_KPROBES=y" >> arch/arm64/configs/$DEFCONFIG
@@ -94,9 +89,6 @@ jobs:
 
           export ARCH=arm64
           export SUBARCH=arm64
-
-          export KBUILD_BUILD_USER=github
-          export KBUILD_BUILD_HOST=actions
 
           export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
 
@@ -118,21 +110,16 @@ jobs:
           git clone --depth=1 \
           https://github.com/osm0sis/AnyKernel3.git AnyKernel3
 
-      - name: Copy kernel files
+      - name: Copy Image
         run: |
           cp kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
 
-          if [ -f kernel/out/arch/arm64/boot/dtbo.img ]; then
-            cp kernel/out/arch/arm64/boot/dtbo.img AnyKernel3/
-          fi
-
-      - name: Pack AnyKernel3
+      - name: Pack zip
         run: |
           cd AnyKernel3
-
           zip -r9 Kernel-SUSFS.zip *
 
-      - name: Upload AnyKernel3
+      - name: Upload zip
         uses: actions/upload-artifact@v4
         with:
           name: Kernel-SUSFS
