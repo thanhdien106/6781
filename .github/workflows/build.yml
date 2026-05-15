@@ -5,7 +5,6 @@ on:
 
 env:
   KERNEL_SOURCE: https://github.com/thanhdien106/6781.git
-  KERNEL_SOURCE_BRANCH: master
 
   DEFCONFIG: fleur_defconfig
 
@@ -29,15 +28,21 @@ jobs:
           gcc-aarch64-linux-gnu \
           gcc-arm-linux-gnueabi
 
-      - name: Remove old kernel source
+      - name: Remove old source
         run: |
           rm -rf kernel
+          rm -rf AnyKernel3
 
       - name: Clone kernel source
         run: |
           git clone --depth=1 \
-          -b $KERNEL_SOURCE_BRANCH \
           $KERNEL_SOURCE kernel
+
+      - name: Show branch
+        run: |
+          cd kernel
+          git branch
+          git log --oneline -1
 
       - name: Setup KernelSU-Next
         run: |
@@ -110,8 +115,6 @@ jobs:
 
       - name: Clone AnyKernel3
         run: |
-          rm -rf AnyKernel3
-
           git clone --depth=1 \
           https://github.com/osm0sis/AnyKernel3.git AnyKernel3
 
