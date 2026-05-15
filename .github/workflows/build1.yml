@@ -3,6 +3,9 @@ name: Build Kernel
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -13,10 +16,9 @@ jobs:
         sudo apt update
 
         sudo apt install -y \
-          git curl wget zip unzip bc bison flex \
-          build-essential ccache libssl-dev \
-          libelf-dev gcc-aarch64-linux-gnu \
-          gcc-arm-linux-gnueabi python3
+        git curl wget zip unzip bc bison flex \
+        build-essential libssl-dev libelf-dev \
+        gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
     - name: Clone kernel source
       run: |
@@ -28,11 +30,6 @@ jobs:
         git clone --depth=1 \
         https://github.com/JackA1ltman/NonGKI_Kernel_Build_2nd.git nongki
 
-    - name: Clone AnyKernel3
-      run: |
-        git clone --depth=1 \
-        https://github.com/osm0sis/AnyKernel3.git AnyKernel3
-
     - name: Apply SUSFS patch
       run: |
         cd kernel
@@ -43,6 +40,26 @@ jobs:
         ls -l "$PATCH_FILE"
 
         patch -p1 < "$PATCH_FILE" || true
+
+    - name: Show reject files
+      run: |
+        echo "====== REJECT FILES ======"
+        find kernel -name "*.rej" || true
+
+        echo
+        echo "====== namespace.c.rej ======"
+        cat kernel/fs/namespace.c.rej || true
+
+        echo
+        echo "====== task_mmu.c.rej ======"
+        cat kernel/fs/proc/task_mmu.c.rej || true
+
+    - name: Upload reject files
+      uses: actions/upload-artifact@v4
+      with:
+        name: reject-files
+        path: |
+          kernel/**/*.rej
 
     - name: Configure kernel
       run: |
@@ -62,18 +79,9 @@ jobs:
 
         make -j$(nproc)
 
-    - name: Copy Image.gz-dtb
-      run: |
-        cp kernel/out/arch/arm64/boot/Image.gz-dtb \
-        AnyKernel3/ || true
-
-    - name: Create zip
-      run: |
-        cd AnyKernel3
-        zip -r9 Kernel.zip ./*
-
-    - name: Upload kernel zip
+    - name: Upload kernel image
       uses: actions/upload-artifact@v4
       with:
-        name: Kernel
-        path: AnyKernel3/Kernel.zip
+        name: kernel-image
+        path: |
+          kernel/out/arch/arm64/boot/*
