@@ -1,0 +1,130 @@
+name: Build Kernel SUSFS
+
+on:
+  workflow_dispatch:
+
+env:
+  KERNEL_SOURCE: https://github.com/thanhdien106/6781.git
+  KERNEL_SOURCE_BRANCH: main
+
+  DEFCONFIG: fleur_defconfig
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout NonGKI Builder
+        uses: actions/checkout@v4
+
+      - name: Install packages
+        run: |
+          sudo apt update
+
+          sudo apt install -y \
+          git curl wget zip unzip \
+          bc bison flex cpio pahole \
+          build-essential libssl-dev \
+          libelf-dev python3 \
+          gcc-aarch64-linux-gnu \
+          gcc-arm-linux-gnueabi
+
+      - name: Clone kernel source
+        run: |
+          git clone --depth=1 \
+          -b $KERNEL_SOURCE_BRANCH \
+          $KERNEL_SOURCE kernel
+
+      - name: Setup KernelSU-Next
+        run: |
+          cd kernel
+
+          curl -LSs \
+          "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" \
+          | bash -s legacy
+
+      - name: Show SUSFS patch
+        run: |
+          find Patches -type f | grep -i susfs
+
+      - name: Apply SUSFS patch
+        run: |
+          cd kernel
+
+          patch -p1 \
+          < ../Patches/Patch/susfs_patch_to_4.19.patch || true
+
+      - name: Enable KernelSU and SUSFS
+        run: |
+          cd kernel
+
+          echo "CONFIG_KSU=y" >> arch/arm64/configs/$DEFCONFIG
+
+          echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/$DEFCONFIG
+          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> arch/arm64/configs/$DEFCONFIG
+          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> arch/arm64/configs/$DEFCONFIG
+          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> arch/arm64/configs/$DEFCONFIG
+          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> arch/arm64/configs/$DEFCONFIG
+          echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> arch/arm64/configs/$DEFCONFIG
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> arch/arm64/configs/$DEFCONFIG
+
+          echo "CONFIG_KPROBES=y" >> arch/arm64/configs/$DEFCONFIG
+          echo "CONFIG_HAVE_KPROBES=y" >> arch/arm64/configs/$DEFCONFIG
+
+          echo "CONFIG_KALLSYMS=y" >> arch/arm64/configs/$DEFCONFIG
+          echo "CONFIG_KALLSYMS_ALL=y" >> arch/arm64/configs/$DEFCONFIG
+
+      - name: Setup clang
+        run: |
+          git clone --depth=1 \
+          https://gitlab.com/PixelOS-Devices/playgroundtc.git clang
+
+      - name: Build kernel
+        run: |
+          cd kernel
+
+          export ARCH=arm64
+          export SUBARCH=arm64
+
+          export KBUILD_BUILD_USER=github
+          export KBUILD_BUILD_HOST=actions
+
+          export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
+
+          mkdir -p out
+
+          make O=out ARCH=arm64 $DEFCONFIG
+
+          make -j$(nproc --all) \
+          O=out \
+          ARCH=arm64 \
+          CC=clang \
+          LLVM=1 \
+          LLVM_IAS=1 \
+          CROSS_COMPILE=aarch64-linux-gnu- \
+          CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+
+      - name: Clone AnyKernel3
+        run: |
+          git clone --depth=1 \
+          https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+
+      - name: Copy kernel files
+        run: |
+          cp kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+
+          if [ -f kernel/out/arch/arm64/boot/dtbo.img ]; then
+            cp kernel/out/arch/arm64/boot/dtbo.img AnyKernel3/
+          fi
+
+      - name: Pack AnyKernel3
+        run: |
+          cd AnyKernel3
+
+          zip -r9 Kernel-SUSFS.zip *
+
+      - name: Upload AnyKernel3
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-SUSFS
+          path: AnyKernel3/Kernel-SUSFS.zip
